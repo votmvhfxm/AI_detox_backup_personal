@@ -1,78 +1,76 @@
-# wellness/views.py
-# - 감정 메시지 입력 → 분류 → 저장 → 목표 조정 → 코칭 응답
-# - 사용자 설정 조회/수정 API
-
+import logging
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from .models import EmotionLog, UserSettings
-from .serializers import EmotionLogSerializer, UserSettingsSerializer
-from .chatbot import classify_emotion, coaching_for
-from .logic_goal import adjust_target_minutes
+from rest_framework import status
+from rest_framework.permissions import AllowAny
+from .chatbot import AICoach 
 
-class EmotionMessageView(APIView):
+# [로깅 설정] 서버 콘솔에 에러를 빨간색으로 기록
+logger = logging.getLogger(__name__)
+
+class ChatbotAPIView(APIView):
     """
-    POST /api/wellness/chatbot/message/
-    Body: {"message": "오늘 너무 무기력하고 아무 것도 하기 싫어"}
-    1) 규칙 기반으로 감정 분류(모호하면 TODO: 모델 분류)
-    2) EmotionLog 저장
-    3) UserSettings 읽어 목표치 조정 후 저장
-    4) 감정/코칭문구/조정된 목표치를 응답
+    [POST] /api/wellness/chat/
+    - 기능: 앱(피그마)에서 보낸 메시지를 받아 AI '디토'의 답변을 반환합니다.
+    - 입력 예시: { "message": "피곤해", "usage_data": {"most_used_app": "YouTube"} }
     """
-    permission_classes = [IsAuthenticated]
+    # 로그인 안 된 상태에서도 테스트 가능하게 허용 (나중에 IsAuthenticated로 변경 가능)
+    permission_classes = [AllowAny] 
 
     def post(self, request):
-        text = request.data.get("message", "") or ""
+        try:
+            # 1. 데이터 수신 (안전하게 가져오기)
+            # request.data가 비어있을 경우를 대비해 {} 처리
+            data = request.data if request.data else {}
+            
+            user_text = data.get('message', '')
+            usage_data = data.get('usage_data', None)
 
-        # 1) 규칙 기반 분류
-        emotion = classify_emotion(text)
+            # 로그 찍기 (누가 요청을 보냈는지 확인용)
+            logger.info(f"📩 [요청 수신] 메시지: {user_text} / 데이터: {usage_data}")
 
-        # 2) 모호하면 추후 모델 분류(Fallback)로 확장 가능
-        if emotion is None:
-            # TODO: 모델(LLM/감정분류모델) 호출 후 emotion 결정
-            emotion = "안정"  # 임시 기본값
+            # 2. 유효성 검사 (빈 말은 거절)
+            if not user_text or str(user_text).strip() == "":
+                return Response(
+                    {
+                        "success": False,
+                        "error": "내용을 입력해주세요.",
+                        "code": "EMPTY_MESSAGE"
+                    }, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # 3) 감정 로그 저장
-        EmotionLog.objects.create(
-            user=request.user,
-            emotion=emotion,
-            text_original=text
-        )
+            # 3. AI '디토' 소환 및 답변 생성
+            coach = AICoach()
+            
+        
+            reply = coach.generate_response(user_text, usage_data)
 
-        # 4) 사용자 설정 가져오고 목표치 조정
-        settings_obj, _ = UserSettings.objects.get_or_create(user=request.user)
-        new_target = adjust_target_minutes(
-            settings_obj.target_daily_usage_min,
-            emotion,
-            settings_obj.stress_sensitivity
-        )
-        if new_target != settings_obj.target_daily_usage_min:
-            settings_obj.target_daily_usage_min = new_target
-            settings_obj.save(update_fields=["target_daily_usage_min"])
+           
+            # 4. 성공 응답 반환
+            
+            logger.info(f"📤 [응답 발송] 디토: {reply[:20]}...") 
+            
+            return Response({
+                "success": True,
+                "response": reply,
+                "persona": "Ditto (Forest Guardian)",
+                "emotion_analysis": "Complete" 
+            }, status=status.HTTP_200_OK)
 
-        # 5) 코칭 문구 생성
-        msg = coaching_for(emotion)
+        except Exception as e:
+            
+            # 5. 비상 사태 처리 
+            # 에러 내용 콘솔 출력 
 
-        return Response({
-            "emotion": emotion,
-            "coachingMessage": msg,
-            "newTargetDailyUsage": settings_obj.target_daily_usage_min,
-        })
-
-class UserSettingsView(APIView):
-    """
-    GET  /api/wellness/settings/   → 사용자 설정 조회
-    PATCH /api/wellness/settings/  → 설정 일부 수정
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        settings_obj, _ = UserSettings.objects.get_or_create(user=request.user)
-        return Response(UserSettingsSerializer(settings_obj).data)
-
-    def patch(self, request):
-        settings_obj, _ = UserSettings.objects.get_or_create(user=request.user)
-        ser = UserSettingsSerializer(settings_obj, data=request.data, partial=True)
-        ser.is_valid(raise_exception=True)
-        ser.save()
-        return Response(ser.data)
+            logger.error(f"🚨 [서버 에러 발생]: {str(e)}")
+            
+            # 앱에는 잠시 후 다시 시도해달라는 메시지 전달
+            return Response(
+                {
+                    "success": False,
+                    "error": "서버 내부에서 오류가 발생했습니다.",
+                    "detail": str(e) 
+                }, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
