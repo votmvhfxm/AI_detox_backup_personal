@@ -1,15 +1,64 @@
 # accounts/views.py
-# - /api/accounts/me/ 엔드포인트를 위한 뷰
-
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from .serializers import MeSerializer
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+
+from rest_framework_simplejwt.views import TokenObtainPairView
+
+from .serializers import (
+    SignUpSerializer,
+    EmailOrUsernameTokenObtainPairSerializer,  # ✅ 여기로 변경
+    MeSerializer,
+)
+
+
+class SignUpView(APIView):
+    """
+    ✅ POST /api/accounts/signup/
+    body: { "email": "...", "username": "...", "password": "..." }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = SignUpSerializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response(
+                {
+                    "success": True,
+                    "user": {
+                        "id": user.id,
+                        "email": user.email,
+                        "username": user.username,
+                        "provider": user.provider,
+                    },
+                },
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(
+            {"success": False, "errors": serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class EmailLoginView(TokenObtainPairView):
+    """
+    ✅ POST /api/accounts/login/
+    body: { "email": "...", "password": "..." }  또는 { "username": "...", "password": "..." }
+    응답: { "access": "...", "refresh": "...", "user": {...} }
+    """
+    permission_classes = [AllowAny]
+    serializer_class = EmailOrUsernameTokenObtainPairSerializer  # ✅ 여기로 변경
+
 
 class MeView(APIView):
-    """로그인(인증)된 사용자의 기본 정보를 반환하는 뷰"""
-    permission_classes = [IsAuthenticated]  # JWT 토큰이 있어야 접근 가능
+    """
+    ✅ GET /api/accounts/me/
+    header: Authorization: Bearer <access>
+    """
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        # request.user 에는 JWT 토큰으로 인증된 User 객체가 들어있음
-        return Response(MeSerializer(request.user).data)
+        serializer = MeSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)

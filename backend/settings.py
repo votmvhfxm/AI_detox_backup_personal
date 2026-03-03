@@ -129,4 +129,9 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    # ✅ 기본 권한은 "로그인 필요"로 두고,
+    # 회원가입/로그인은 View에서 AllowAny로 열어주기
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
 }
