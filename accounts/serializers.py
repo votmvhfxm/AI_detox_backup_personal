@@ -109,3 +109,10 @@ class EmailOrUsernameTokenObtainPairSerializer(TokenObtainPairSerializer):
             },
         }
         return data
+
+class FirebaseLinkSerializer(serializers.Serializer):
+    """
+    ✅ Firebase 계정 연결용 Serializer
+    - local로 로그인한 사용자가 Firebase id_token을 제출하면 연결하는 데 사용
+    """
+    id_token = serializers.CharField()

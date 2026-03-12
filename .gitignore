@@ -28,3 +28,9 @@ refresh.json
 .DS_Store
 Thumbs.db
 
+# test artifacts
+refresh.json
+firebase_idtoken.json
+firebase_Testlogin.json
+firebase_login.json
+firebase_link.json

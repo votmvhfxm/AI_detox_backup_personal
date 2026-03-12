@@ -135,3 +135,17 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ),
 }
+
+import os
+import firebase_admin
+from firebase_admin import credentials
+
+FIREBASE_SERVICE_ACCOUNT_PATH = os.getenv(
+    "FIREBASE_SERVICE_ACCOUNT_PATH",
+    os.path.join(BASE_DIR, "secrets", "firebase-service-account.json")
+)
+
+# Django runserver autoreload 때문에 중복 init 방지
+if not firebase_admin._apps:
+    cred = credentials.Certificate(FIREBASE_SERVICE_ACCOUNT_PATH)
+    firebase_admin.initialize_app(cred)

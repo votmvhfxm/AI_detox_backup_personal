@@ -2,7 +2,7 @@
 from django.urls import path
 from rest_framework_simplejwt.views import TokenRefreshView
 
-from .views import SignUpView, EmailLoginView, MeView
+from .views import SignUpView, EmailLoginView, MeView, FirebaseLoginView, FirebaseLinkView
 
 urlpatterns = [
     # ✅ 회원가입
@@ -16,4 +16,9 @@ urlpatterns = [
 
     # ✅ 내 정보
     path("me/", MeView.as_view(), name="me"),
+
+    # ✅ Firebase 소셜 로그인
+    path("firebase/login/", FirebaseLoginView.as_view(), name="firebase_login"),
+
+    path("firebase/link/", FirebaseLinkView.as_view(), name="firebase_link"),
 ]
